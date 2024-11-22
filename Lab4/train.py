@@ -4,63 +4,21 @@ import torch.optim as optim
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
+<<<<<<< HEAD:Lab4/train_custom_model.py
 from lightweight_model import OptimizedSegmentationModel
+=======
+from torchsummary import summary
+from torch.amp import autocast, GradScaler
+
+from model import student
+>>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
 import os
 import matplotlib.pyplot as plt
-from torch.amp import autocast, GradScaler
+import argparse
+import datetime
 
 # Enable cuDNN benchmark mode for better performance
 torch.backends.cudnn.benchmark = True
-
-
-# Advanced data transformations
-def get_transforms():
-    train_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.RandomRotation(15),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    val_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    target_transform = transforms.Compose([
-        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
-        transforms.PILToTensor()
-    ])
-    return train_transform, val_transform, target_transform
-
-
-# Dataloader setup
-def get_dataloaders(batch_size):
-    train_transform, val_transform, target_transform = get_transforms()
-
-    train_dataset = VOCSegmentation(
-        root='./data',
-        year='2012',
-        image_set='train',
-        download=True,
-        transform=train_transform,
-        target_transform=target_transform
-    )
-    val_dataset = VOCSegmentation(
-        root='./data',
-        year='2012',
-        image_set='val',
-        download=True,
-        transform=val_transform,
-        target_transform=target_transform
-    )
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
-
-    return train_loader, val_loader
-
 
 # Training function with gradient accumulation and mixed precision
 def train_one_epoch(model, dataloader, optimizer, loss_fn, device, scaler, accumulation_steps=4):
@@ -86,7 +44,6 @@ def train_one_epoch(model, dataloader, optimizer, loss_fn, device, scaler, accum
         total_loss += loss.item()
     return total_loss / len(dataloader)
 
-
 # Validation function
 def validate(model, dataloader, loss_fn, device):
     model.eval()
@@ -100,7 +57,6 @@ def validate(model, dataloader, loss_fn, device):
             loss = loss_fn(outputs, targets)
             total_loss += loss.item()
     return total_loss / len(dataloader)
-
 
 # Dynamic learning rate adjustment
 def adjust_learning_rate(optimizer, val_losses, threshold=0.01, reduce_factor=0.7, increase_factor=1.3, min_lr=1e-5, max_lr=1e-3):
@@ -118,7 +74,6 @@ def adjust_learning_rate(optimizer, val_losses, threshold=0.01, reduce_factor=0.
                 new_lr = min(param_group['lr'] * increase_factor, max_lr)
                 param_group['lr'] = new_lr
                 print(f"Learning rate increased to: {new_lr:.6f}")
-
 
 # Live plot class
 class LivePlot:
@@ -154,19 +109,76 @@ class LivePlot:
         plt.savefig(filename)
         print(f"Loss curve saved as '{filename}'.")
 
-
 # Main training loop
 def main():
+<<<<<<< HEAD:Lab4/train_custom_model.py
     batch_size = 2  
+=======
+    batch_size = 64  # Reduced to fit GTX 1650 VRAM
+>>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
     num_classes = 21
     num_epochs = 20
     learning_rate = 1e-3
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    argParser = argparse.ArgumentParser()
+    argParser.add_argument('-e', metavar='epochs', type=int, help='# of epochs [30]')
+    argParser.add_argument('-b', metavar='batch size', type=int, help='batch size [32]')
+    args = argParser.parse_args()
 
-    train_loader, val_loader = get_dataloaders(batch_size)
+    if args.e != None:
+        num_epochs = args.e
+    if args.b != None:
+        batch_size = args.b
 
+<<<<<<< HEAD:Lab4/train_custom_model.py
     model = OptimizedSegmentationModel(num_classes=num_classes).to(device)
+=======
+    device = 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda'
+    print('\t\tusing device ', device)
+
+    # transforms
+    train_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.RandomRotation(15),
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    val_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+    target_transform = transforms.Compose([
+        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
+        transforms.PILToTensor()
+    ])
+
+    # data loaders
+    train_dataset = VOCSegmentation(root='./data', year='2012',
+        image_set='train',
+        download=True,
+        transform=train_transform,
+        target_transform=target_transform
+    )
+    val_dataset = VOCSegmentation(
+        root='./data',
+        year='2012',
+        image_set='val',
+        download=True,
+        transform=val_transform,
+        target_transform=target_transform
+    )
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+
+    model = student(num_classes=num_classes).to(device)
+    # print(summary(model=model, input_size=(1, 3, 256, 256)))
+>>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
     loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
@@ -174,6 +186,11 @@ def main():
 
     live_plot = LivePlot()
     val_losses = []
+
+    print('\t\tn epochs = ', num_epochs)
+    print('\t\tbatch size = ', batch_size)
+    print('\t\tlearning rate = ', learning_rate)
+    # print('\t\tweight decay = ', w)
 
     for epoch in range(1, num_epochs + 1):
         print(f"Epoch {epoch}/{num_epochs}")
@@ -192,9 +209,9 @@ def main():
 
     if not os.path.exists("./models"):
         os.makedirs("./models")
-    torch.save(model.state_dict(), "./models/advanced_segmentation.pth")
+    torch.save(model.state_dict(), "./models/student.pth")
     print("Model saved.")
-    live_plot.save("final_loss_curve.png")
+    live_plot.save("student_curve.png")
 
 
 if __name__ == "__main__":

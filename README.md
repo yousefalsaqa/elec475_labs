@@ -17,6 +17,7 @@ These labs are focused on practical applications of machine learning algorithms 
 
 ---
 
+
 ## 🚀 Project Highlights
 
 ### 1. SnoutNet: Pet Nose Localization
