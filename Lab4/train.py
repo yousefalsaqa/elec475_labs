@@ -16,44 +16,6 @@ import datetime
 # Enable cuDNN benchmark mode for better performance
 torch.backends.cudnn.benchmark = True
 
-# Training function with gradient accumulation and mixed precision
-def train_one_epoch(model, dataloader, optimizer, loss_fn, device, scaler, accumulation_steps=4):
-    model.train()
-    total_loss = 0.0
-    optimizer.zero_grad()
-
-    for step, (imgs, targets) in enumerate(dataloader):
-        imgs = imgs.to(device)
-        targets = targets.squeeze(1).to(device, dtype=torch.long)
-
-        with autocast(device_type="cuda"):
-            outputs = model(imgs)
-            loss = loss_fn(outputs, targets) / accumulation_steps
-
-        scaler.scale(loss).backward()
-
-        if (step + 1) % accumulation_steps == 0 or (step + 1) == len(dataloader):
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
-
-        total_loss += loss.item()
-    return total_loss / len(dataloader)
-
-# Validation function
-def validate(model, dataloader, loss_fn, device):
-    model.eval()
-    total_loss = 0.0
-    with torch.no_grad():
-        for imgs, targets in dataloader:
-            imgs = imgs.to(device)
-            targets = targets.squeeze(1).to(device, dtype=torch.long)
-
-            outputs = model(imgs)
-            loss = loss_fn(outputs, targets)
-            total_loss += loss.item()
-    return total_loss / len(dataloader)
-
 # Dynamic learning rate adjustment
 def adjust_learning_rate(optimizer, val_losses, threshold=0.01, reduce_factor=0.7, increase_factor=1.3, min_lr=1e-5, max_lr=1e-3):
     if len(val_losses) > 3:
@@ -104,6 +66,67 @@ class LivePlot:
         plt.ioff()
         plt.savefig(filename)
         print(f"Loss curve saved as '{filename}'.")
+
+def init_weights(m):
+    if type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform_(m.weight)
+        m.bias.data.fill_(0.01)
+
+def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, scheduler, device, scaler)
+    print('training started at '.format(datetime.datetime.now()))
+    accumulation_steps = 4
+
+    losses_train = []
+    losses_val = []
+
+    for epoch in range(1, num_epochs + 1):
+        print(f"Epoch {epoch}/{num_epochs}")
+        model.train()
+        total_loss = 0.0
+
+        for step, (imgs, targets) in enumerate(train_loader):
+            imgs = imgs.to(device)
+            targets = targets.squeeze(1).to(device, dtype=torch.float32)
+            outputs = model(imgs)
+            loss = loss_fn(outputs, targets)
+            scaler.scale(loss).backward()
+            if (step + 1) % accumulation_steps == 0 or (step + 1) == len(train_loader):
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
+
+            total_loss += loss.item()
+
+        train_loss = [train_loss/len(train_loader)]
+
+        model.eval()
+        total_loss = 0.0
+        with torch.no_grad():
+            for imgs, targets in val_loader:
+                imgs = imgs.to(device)
+                targets = targets.squeeze(1).to(device, dtype=torch.float32)
+
+                outputs = model(imgs)
+                loss = loss_fn(outputs, targets)
+                total_val_loss += loss.item()
+
+        val_loss = total_loss / len(val_loader)
+        val_losses.append(val_loss)
+
+        print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+        live_plot.update(epoch, train_loss, val_loss)
+
+        adjust_learning_rate(optimizer, val_losses)
+
+        # Clear cache to avoid memory overflow
+        torch.cuda.empty_cache()
+
+    if not os.path.exists("./models"):
+        os.makedirs("./models")
+    torch.save(model.state_dict(), "./models/student.pth")
+    print("Model saved.")
+    live_plot.save("student_curve.png")
+
 
 # Main training loop
 def main():
@@ -166,10 +189,12 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     model = student(num_classes=num_classes).to(device)
-    # print(summary(model=model, input_size=(1, 3, 256, 256)))
+    model.apply(init_weights)
+
     loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min')
     scaler = GradScaler()
 
     live_plot = LivePlot()
@@ -180,26 +205,16 @@ def main():
     print('\t\tlearning rate = ', learning_rate)
     # print('\t\tweight decay = ', w)
 
-    for epoch in range(1, num_epochs + 1):
-        print(f"Epoch {epoch}/{num_epochs}")
-
-        train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device, scaler)
-        val_loss = validate(model, val_loader, loss_fn, device)
-        val_losses.append(val_loss)
-
-        print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-        live_plot.update(epoch, train_loss, val_loss)
-
-        adjust_learning_rate(optimizer, val_losses)
-
-        # Clear cache to avoid memory overflow
-        torch.cuda.empty_cache()
-
-    if not os.path.exists("./models"):
-        os.makedirs("./models")
-    torch.save(model.state_dict(), "./models/student.pth")
-    print("Model saved.")
-    live_plot.save("student_curve.png")
+    train(
+        n_epochs=num_epochs,
+        optimizer=optimizer,
+        model=model,
+        loss_fn=loss_fn,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        scheduler=scheduler,
+        scaler=scaler,
+        device=device)
 
 
 if __name__ == "__main__":
