@@ -4,7 +4,7 @@ import torch.optim as optim
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from lightweight_model import LightSegmentationModel
+from lightweight_model import OptimizedSegmentationModel
 import os
 import matplotlib.pyplot as plt
 from torch.amp import autocast, GradScaler
@@ -157,16 +157,16 @@ class LivePlot:
 
 # Main training loop
 def main():
-    batch_size = 2  # Reduced to fit GTX 1650 VRAM
+    batch_size = 2  
     num_classes = 21
-    num_epochs = 35
+    num_epochs = 20
     learning_rate = 1e-3
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     train_loader, val_loader = get_dataloaders(batch_size)
 
-    model = LightSegmentationModel(num_classes=num_classes).to(device)
+    model = OptimizedSegmentationModel(num_classes=num_classes).to(device)
     loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
