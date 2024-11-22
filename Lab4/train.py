@@ -132,7 +132,7 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
 def main():
     batch_size = 64  # Reduced to fit GTX 1650 VRAM
     num_classes = 21
-    num_epochs = 35
+    num_epochs = 20
     learning_rate = 1e-3
 
     argParser = argparse.ArgumentParser()
