@@ -4,14 +4,10 @@ import torch.optim as optim
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-<<<<<<< HEAD:Lab4/train_custom_model.py
-from lightweight_model import OptimizedSegmentationModel
-=======
 from torchsummary import summary
 from torch.amp import autocast, GradScaler
 
 from model import student
->>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
 import os
 import matplotlib.pyplot as plt
 import argparse
@@ -111,11 +107,7 @@ class LivePlot:
 
 # Main training loop
 def main():
-<<<<<<< HEAD:Lab4/train_custom_model.py
-    batch_size = 2  
-=======
     batch_size = 64  # Reduced to fit GTX 1650 VRAM
->>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
     num_classes = 21
     num_epochs = 20
     learning_rate = 1e-3
@@ -130,9 +122,6 @@ def main():
     if args.b != None:
         batch_size = args.b
 
-<<<<<<< HEAD:Lab4/train_custom_model.py
-    model = OptimizedSegmentationModel(num_classes=num_classes).to(device)
-=======
     device = 'cpu'
     if torch.cuda.is_available():
         device = 'cuda'
@@ -178,7 +167,6 @@ def main():
 
     model = student(num_classes=num_classes).to(device)
     # print(summary(model=model, input_size=(1, 3, 256, 256)))
->>>>>>> 10495f12a424982a27deedc9f2d999a741085b9d:Lab4/train.py
     loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
