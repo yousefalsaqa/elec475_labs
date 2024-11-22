@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from lightweight_model import LightweightSegmentationModel  # Import your custom model
+from Project.elec475_labs.Lab4.model import LightweightSegmentationModel  # Import your custom model
 import numpy as np
 import os
 

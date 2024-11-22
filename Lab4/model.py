@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class LightSegmentationModel(nn.Module):
+class student(nn.Module):
     def __init__(self, num_classes=21):
-        super(LightSegmentationModel, self).__init__()
+        super(student, self).__init__()
 
         # Encoder with depthwise separable convolutions
         self.encoder1 = self._depthwise_separable_conv(3, 32)  # Input to 32 channels
@@ -78,10 +78,18 @@ class LightSegmentationModel(nn.Module):
         return output
 
 
+def get_model_size(model):
+    param_size = sum(p.numel() * p.element_size() for p in model.parameters())  # Parameters size
+    buffer_size = sum(b.numel() * b.element_size() for b in model.buffers())    # Buffers size
+    total_size = param_size + buffer_size  # Total size in bytes
+    return total_size
+
 # Test the model
 if __name__ == "__main__":
-    model = LightSegmentationModel(num_classes=21)
+    model = student(num_classes=21)
     input_tensor = torch.randn(1, 3, 256, 256)  # Example input (batch_size, channels, height, width)
     output = model(input_tensor)
     print(f"Output shape: {output.shape}")  # Should match (batch_size, num_classes, height, width)
     print(f"Total parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"Total size: {get_model_size(model)}")
+
