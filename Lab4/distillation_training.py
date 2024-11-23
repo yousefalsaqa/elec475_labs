@@ -5,8 +5,9 @@ from torchvision.models.segmentation import fcn_resnet50
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from Project.elec475_labs.Lab4.model import LightweightSegmentationModel  # Import your custom student model
+from model import student  # Import your custom student model
 import os
+import matplotlib.pyplot as plt
 
 # Hyperparameters
 ALPHA = 0.5  # Weight for ground truth loss
@@ -110,7 +111,6 @@ def validate(student_model, val_loader, loss_fn, device):
 
 # Plot loss curves
 def plot_losses(train_losses, val_losses, save_path="distillation_loss_curve.png"):
-    import matplotlib.pyplot as plt
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses, label="Train Loss")
     plt.plot(val_losses, label="Validation Loss")

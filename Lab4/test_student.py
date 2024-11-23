@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from model import student  # Import your custom model
+from model import student, UNet  # Import your custom model
 import numpy as np
 import os
 

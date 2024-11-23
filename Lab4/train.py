@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torchsummary import summary
 from torch.amp import autocast, GradScaler
 
-from model import student
+from model import student, UNet
 import os
 import matplotlib.pyplot as plt
 import argparse
@@ -124,9 +124,9 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         # Clear cache to avoid memory overflow
         torch.cuda.empty_cache()
 
-        torch.save(model.state_dict(), "models/student.pth")
+        torch.save(model.state_dict(), "models/test.pth")
         print("Model saved.")
-        # live_plot.save("student_curve.png")
+        # live_plot.save("unet_curve.png")
 
         plt.ioff()
         plt.figure(2, figsize=(12, 7))
@@ -136,8 +136,8 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend(loc=1)
-        print("saving loss/student_loss.png")
-        plt.savefig("loss/student_loss.png")
+        print("saving loss/unet_loss.png")
+        plt.savefig("loss/unet_loss.png")
 
 # Main training loop
 def main():
@@ -204,7 +204,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-    model = student(num_classes=num_classes).to(device)
+    model = student(num_classes=21).to(device)
     model.apply(init_weights)
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=255)
