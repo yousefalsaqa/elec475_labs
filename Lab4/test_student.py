@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from Project.elec475_labs.Lab4.model import LightweightSegmentationModel  # Import your custom model
+from model import student  # Import your custom model
 import numpy as np
 import os
 
@@ -88,7 +88,7 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
 
     # Load the trained model
     print("Loading the trained custom model...")
-    model = LightweightSegmentationModel(num_classes=num_classes).to(device)
+    model = student(num_classes=num_classes).to(device)
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found at {model_path}")
     model.load_state_dict(torch.load(model_path))
@@ -122,5 +122,5 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
     print(f"Mean Intersection over Union (mIoU): {overall_miou:.4f}")
 
 if __name__ == "__main__":
-    model_checkpoint = "./models/lightweight_segmentation.pth"  # Path to the trained custom model checkpoint
+    model_checkpoint = "./models/student.pth"  # Path to the trained custom model checkpoint
     test_custom_model(model_path=model_checkpoint)

@@ -47,7 +47,7 @@ class LivePlot:
         self.train_line, = self.ax.plot([], [], label="Train Loss", marker="o")
         self.val_line, = self.ax.plot([], [], label="Validation Loss", marker="x")
         self.ax.legend()
-        plt.ion()
+        # plt.ion()
 
     def update(self, epoch, train_loss, val_loss):
         self.epochs.append(epoch)
@@ -72,61 +72,72 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
-def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, scheduler, device, scaler)
-    print('training started at '.format(datetime.datetime.now()))
+def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, scheduler, device, scaler):
+    print('training started at {}'.format(datetime.datetime.now()))
     accumulation_steps = 4
 
-    losses_train = []
-    losses_val = []
+    train_losses = []
+    val_losses = []
 
     for epoch in range(1, num_epochs + 1):
-        print(f"Epoch {epoch}/{num_epochs}")
+        print("Epoch {}/{}, {}".format(epoch, num_epochs, datetime.datetime.now()))
         model.train()
-        total_loss = 0.0
+        total_train_loss = 0.0
 
         for step, (imgs, targets) in enumerate(train_loader):
             imgs = imgs.to(device)
-            targets = targets.squeeze(1).to(device, dtype=torch.float32)
-            outputs = model(imgs)
-            loss = loss_fn(outputs, targets)
+            targets = targets.squeeze(1).to(device, dtype=torch.long)
+            # forward pass
+            with autocast(device_type="cuda"):
+                outputs = model(imgs)
+                loss = loss_fn(outputs, targets)
+            # backwards pass
             scaler.scale(loss).backward()
             if (step + 1) % accumulation_steps == 0 or (step + 1) == len(train_loader):
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
 
-            total_loss += loss.item()
+            total_train_loss += loss.item()
 
-        train_loss = [train_loss/len(train_loader)]
+        train_loss = [total_train_loss/len(train_loader)]
+        train_losses.append(train_loss)
 
+        # validation
         model.eval()
-        total_loss = 0.0
+        total_val_loss = 0.0
         with torch.no_grad():
             for imgs, targets in val_loader:
                 imgs = imgs.to(device)
-                targets = targets.squeeze(1).to(device, dtype=torch.float32)
+                targets = targets.squeeze(1).to(device, dtype=torch.long)
 
                 outputs = model(imgs)
                 loss = loss_fn(outputs, targets)
                 total_val_loss += loss.item()
 
-        val_loss = total_loss / len(val_loader)
+        scheduler.step(total_val_loss)
+        val_loss = [total_val_loss / len(val_loader)]
         val_losses.append(val_loss)
 
-        print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-        live_plot.update(epoch, train_loss, val_loss)
-
-        adjust_learning_rate(optimizer, val_losses)
+        print(f"Train Loss: {train_loss}, Val Loss: {val_loss}")
 
         # Clear cache to avoid memory overflow
         torch.cuda.empty_cache()
 
-    if not os.path.exists("./models"):
-        os.makedirs("./models")
-    torch.save(model.state_dict(), "./models/student.pth")
-    print("Model saved.")
-    live_plot.save("student_curve.png")
+        torch.save(model.state_dict(), "models/student.pth")
+        print("Model saved.")
+        # live_plot.save("student_curve.png")
 
+        plt.ioff()
+        plt.figure(2, figsize=(12, 7))
+        plt.clf()
+        plt.plot(train_losses, label='train')
+        plt.plot(val_losses, label='val')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.legend(loc=1)
+        print("saving loss/student_loss.png")
+        plt.savefig("loss/student_loss.png")
 
 # Main training loop
 def main():
@@ -139,6 +150,11 @@ def main():
     argParser.add_argument('-e', metavar='epochs', type=int, help='# of epochs [30]')
     argParser.add_argument('-b', metavar='batch size', type=int, help='batch size [32]')
     args = argParser.parse_args()
+
+    if not os.path.exists("models"):
+        os.makedirs("models")
+    if not os.path.exists("loss"):
+        os.makedirs("loss")
 
     if args.e != None:
         num_epochs = args.e
@@ -185,8 +201,8 @@ def main():
         target_transform=target_transform
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     model = student(num_classes=num_classes).to(device)
     model.apply(init_weights)
@@ -206,7 +222,7 @@ def main():
     # print('\t\tweight decay = ', w)
 
     train(
-        n_epochs=num_epochs,
+        num_epochs=num_epochs,
         optimizer=optimizer,
         model=model,
         loss_fn=loss_fn,
