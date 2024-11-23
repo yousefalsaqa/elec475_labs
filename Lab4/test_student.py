@@ -74,6 +74,62 @@ def get_voc_dataloader(batch_size):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
     return dataloader
 
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import ListedColormap
+
+def plot_segmentation(predictions, targets, num_classes=21, save_path=None, index=0):
+    """
+    Plots segmentation predictions and ground truth side-by-side.
+
+    Args:
+        predictions (torch.Tensor or np.ndarray): Predicted segmentation maps (HxW or BxHxW).
+        targets (torch.Tensor or np.ndarray): Ground truth segmentation maps (HxW or BxHxW).
+        num_classes (int): Number of segmentation classes (default: 21).
+        save_path (str, optional): Path to save the plot. If None, the plot will be shown.
+        index (int): Index of the batch item to visualize if batch dimension exists.
+    """
+    # Ensure predictions and targets are numpy arrays
+    if isinstance(predictions, torch.Tensor):
+        predictions = predictions.cpu().numpy()
+    if isinstance(targets, torch.Tensor):
+        targets = targets.cpu().numpy()
+
+    # Handle batch dimensions
+    if predictions.ndim == 3:  # If batch dimension exists
+        predictions = predictions[index]
+    if targets.ndim == 3:  # If batch dimension exists
+        targets = targets[index]
+
+    # Define a colormap for 21 classes
+    colors = plt.cm.get_cmap('tab20', num_classes)
+    cmap = ListedColormap(colors(range(num_classes)))
+
+    # Create the plot
+    plt.figure(figsize=(10, 5))
+    
+    # Plot predictions
+    plt.subplot(1, 2, 1)
+    plt.imshow(predictions, cmap=cmap, interpolation='nearest', vmin=0, vmax=num_classes - 1)
+    plt.colorbar(ticks=np.arange(0, num_classes), label='Classes', shrink=0.8)
+    plt.title('Predictions')
+    plt.axis('off')
+
+    # Plot ground truth
+    plt.subplot(1, 2, 2)
+    plt.imshow(targets, cmap=cmap, interpolation='nearest', vmin=0, vmax=num_classes - 1)
+    plt.colorbar(ticks=np.arange(0, num_classes), label='Classes', shrink=0.8)
+    plt.title('Ground Truth')
+    plt.axis('off')
+
+    # Show or save the plot
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        print(f"Plot saved at: {save_path}")
+    else:
+        plt.show()
+
+
 # Test function for the custom lightweight model
 def test_custom_model(model_path, batch_size=16, num_classes=21):
     """
@@ -109,9 +165,9 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
             # Get model predictions
             outputs = model(images)
             predictions = torch.argmax(outputs, dim=1)  # Convert logits to class indices
-
             # Calculate mIoU for the batch
             batch_miou = calculate_miou(predictions, targets, num_classes)
+            plot_segmentation(predictions, targets, 21, save_path=None)
             miou_list.append(batch_miou)
 
             if idx % 10 == 0:
