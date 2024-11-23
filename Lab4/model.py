@@ -3,155 +3,99 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class student(nn.Module):
-    def __init__(self, num_classes=21):
+    def __init__(self, in_channels=3, num_classes=21):
         super(student, self).__init__()
 
         # Encoder
-        self.encoder1 = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample
-        )
-        self.encoder2 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample
-        )
-        self.encoder3 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample
-        )
+        self.enc1 = self.double_conv(in_channels, 32)  # Reduced from 64 to 32
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.enc2 = self.double_conv(32, 64)  # Reduced from 128 to 64
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.enc3 = self.double_conv(64, 128)  # Reduced from 256 to 128
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.enc4 = self.double_conv(128, 256)  # Reduced from 512 to 256
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Bottleneck
-        self.bottleneck = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
+        self.bottleneck = self.double_conv(256, 512)  # Reduced from 1024 to 512
 
         # Decoder
-        self.decoder3 = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        )
-        self.decoder2 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        )
-        self.decoder1 = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        )
+        self.upconv4 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec4 = self.double_conv(512, 256)
 
-        # Output
-        self.final = nn.Conv2d(32, num_classes, kernel_size=1)
+        self.upconv3 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec3 = self.double_conv(256, 128)
 
-    def forward(self, x):
-        enc1 = self.encoder1(x)
-        enc2 = self.encoder2(enc1)
-        enc3 = self.encoder3(enc2)
-        bottleneck = self.bottleneck(enc3)
+        self.upconv2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec2 = self.double_conv(128, 64)
 
-        dec3 = self.decoder3(bottleneck)
-        enc3_resized = F.interpolate(enc3, size=dec3.shape[2:], mode='bilinear', align_corners=False)
-        dec2 = self.decoder2(dec3 + enc3_resized)
+        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
+        self.dec1 = self.double_conv(64, 32)
 
-        enc2_resized = F.interpolate(enc2, size=dec2.shape[2:], mode='bilinear', align_corners=False)
-        dec1 = self.decoder1(dec2 + enc2_resized)
+        # Output layer
+        self.final_conv = nn.Conv2d(32, num_classes, kernel_size=1)
 
-        enc1_resized = F.interpolate(enc1, size=dec1.shape[2:], mode='bilinear', align_corners=False)
-        out = self.final(dec1 + enc1_resized)
-        return out
-
-
-class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(UNet, self).__init__()
-
-        # Contracting Path (Encoder)
-        self.encoder1 = self.conv_block(in_channels, 64)
-        self.encoder2 = self.conv_block(64, 128)
-        self.encoder3 = self.conv_block(128, 256)
-        self.encoder4 = self.conv_block(256, 512)
-        self.encoder5 = self.conv_block(512, 1024)
-
-        # Expanding Path (Decoder)
-        self.decoder4 = self.upconv_block(1024, 512)
-        self.decoder3 = self.upconv_block(512, 256)
-        self.decoder2 = self.upconv_block(256, 128)
-        self.decoder1 = self.upconv_block(128, 64)
-
-        # Final Convolution layer
-        self.final_conv = nn.Conv2d(64, out_channels, kernel_size=1)
-
-    def conv_block(self, in_channels, out_channels):
-        """Convolution Block (Conv + ReLU + MaxPool)"""
-        block = nn.Sequential(
+    def double_conv(self, in_channels, out_channels):
+        """
+        Helper function for a double convolution block:
+        Conv2D -> ReLU -> Conv2D -> ReLU
+        """
+        return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2)
-        )
-        return block
-
-    def upconv_block(self, in_channels, out_channels):
-        """Up-convolution Block (Upsample + Conv + ReLU)"""
-        block = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
             nn.ReLU(inplace=True)
         )
-        return block
+
+    def crop_tensor(self, encoder_tensor, target_tensor):
+        """
+        Crop the encoder tensor to match the spatial dimensions of the target tensor.
+        """
+        _, _, h, w = target_tensor.size()
+        enc_h, enc_w = encoder_tensor.size(2), encoder_tensor.size(3)
+        delta_h, delta_w = enc_h - h, enc_w - w
+        top_crop = delta_h // 2
+        left_crop = delta_w // 2
+        return encoder_tensor[:, :, top_crop:top_crop + h, left_crop:left_crop + w]
 
     def forward(self, x):
-        # Contracting path
-        enc1 = self.encoder1(x)
-        enc2 = self.encoder2(enc1)
-        enc3 = self.encoder3(enc2)
-        enc4 = self.encoder4(enc3)
-        enc5 = self.encoder5(enc4)
+        # Encoder path
+        enc1 = self.enc1(x)
+        enc2 = self.enc2(self.pool1(enc1))
+        enc3 = self.enc3(self.pool2(enc2))
+        enc4 = self.enc4(self.pool3(enc3))
+        bottleneck = self.bottleneck(self.pool4(enc4))
 
-        # Expanding path with skip connections
-        dec4 = self.decoder4(enc5)
-        dec4 = torch.cat([dec4, enc4], dim=1)  # Concatenate encoder and decoder features
-        dec4 = self.conv_block_1x1(dec4, 512)  # Reduce channels before next decoder layer
-        
-        dec3 = self.decoder3(dec4)
-        dec3 = torch.cat([dec3, enc3], dim=1)
-        dec3 = self.conv_block_1x1(dec3, 256)  # Reduce channels
+        # Decoder path
+        up4 = self.upconv4(bottleneck)
+        cropped_enc4 = self.crop_tensor(enc4, up4)
+        dec4 = self.dec4(torch.cat([up4, cropped_enc4], dim=1))
 
-        dec2 = self.decoder2(dec3)
-        dec2 = torch.cat([dec2, enc2], dim=1)
-        dec2 = self.conv_block_1x1(dec2, 128)  # Reduce channels
+        up3 = self.upconv3(dec4)
+        cropped_enc3 = self.crop_tensor(enc3, up3)
+        dec3 = self.dec3(torch.cat([up3, cropped_enc3], dim=1))
 
-        dec1 = self.decoder1(dec2)
-        dec1 = torch.cat([dec1, enc1], dim=1)
-        dec1 = self.conv_block_1x1(dec1, 64)  # Reduce channels
+        up2 = self.upconv2(dec3)
+        cropped_enc2 = self.crop_tensor(enc2, up2)
+        dec2 = self.dec2(torch.cat([up2, cropped_enc2], dim=1))
 
-        # Final output
-        output = self.final_conv(dec1)
-        return output
+        up1 = self.upconv1(dec2)
+        cropped_enc1 = self.crop_tensor(enc1, up1)
+        dec1 = self.dec1(torch.cat([up1, cropped_enc1], dim=1))
 
-    def conv_block_1x1(self, x, out_channels):
-        """1x1 Convolution to reduce the number of channels after concatenation"""
-        return nn.Conv2d(x.size(1), out_channels, kernel_size=1)(x)
+        # Output
+        out = self.final_conv(dec1)
+        out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
+        return out
 
 
-# Test the model (optional)
+# Test the model
 if __name__ == "__main__":
-    # model = student(num_classes=21)
-    model = UNet(in_channels=3, out_channels=21)
-    input_tensor = torch.randn(1, 3, 256, 256)
+    model = student(in_channels=3, num_classes=21)
+    input_tensor = torch.randn(1, 3, 224, 224)
     output = model(input_tensor)
     print(f"Output shape: {output.shape}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
