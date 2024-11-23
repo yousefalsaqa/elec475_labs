@@ -191,14 +191,14 @@ def main():
     ])
 
     # data loaders
-    train_dataset = VOCSegmentation(root='./data', year='2012',
+    train_dataset = VOCSegmentation(root='./Lab4/data', year='2012',
         image_set='train',
         download=True,
         transform=train_transform,
         target_transform=target_transform
     )
     val_dataset = VOCSegmentation(
-        root='./data',
+        root='./Lab4/data',
         year='2012',
         image_set='val',
         download=True,
