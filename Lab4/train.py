@@ -124,7 +124,7 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         # Clear cache to avoid memory overflow
         torch.cuda.empty_cache()
 
-        torch.save(model.state_dict(), "models/test.pth")
+        torch.save(model.state_dict(), f"models/{filename}{datetime.datetime.now()}.pth")
         print("Model saved.")
         # live_plot.save("unet_curve.png")
 
@@ -136,8 +136,8 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend(loc=1)
-        print("saving loss/unet_loss.png")
-        plt.savefig("loss/unet_loss.png")
+        print(f"saving loss/{filename}_loss.png")
+        plt.savefig(f"loss/{filename}_loss.png")
 
 # Main training loop
 def main():
@@ -145,10 +145,13 @@ def main():
     num_classes = 21
     num_epochs = 20
     learning_rate = 1e-3
+    global filename 
+    filename = 'student'
 
     argParser = argparse.ArgumentParser()
     argParser.add_argument('-e', metavar='epochs', type=int, help='# of epochs [30]')
     argParser.add_argument('-b', metavar='batch size', type=int, help='batch size [32]')
+    argParser.add_argument('-f', metavar='filename', type=int, help='the name of the .pth file to save')
     args = argParser.parse_args()
 
     if not os.path.exists("models"):
@@ -160,6 +163,8 @@ def main():
         num_epochs = args.e
     if args.b != None:
         batch_size = args.b
+    if args.f != None:
+        filename = args.f
 
     device = 'cpu'
     if torch.cuda.is_available():
