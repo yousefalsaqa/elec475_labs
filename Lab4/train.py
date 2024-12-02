@@ -89,7 +89,8 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         for step, (imgs, targets) in enumerate(train_loader):
             imgs = imgs.to(device)
             targets = targets.squeeze(1).to(device, dtype=torch.long)
-
+            # Remap background class (0) to ignore_index (255)
+            targets[targets == 0] = 255
             #print("Targets unique values:", torch.unique(targets))  # Add this line
             # forward pass
             with autocast(device_type="cuda"):
