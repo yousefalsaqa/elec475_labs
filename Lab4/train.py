@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torchsummary import summary
 from torch.amp import autocast, GradScaler
 
-from model import student, UNet
+from model import student
 import os
 import matplotlib.pyplot as plt
 import argparse
@@ -15,6 +15,8 @@ import datetime
 
 # Enable cuDNN benchmark mode for better performance
 torch.backends.cudnn.benchmark = True
+
+
 
 # Dynamic learning rate adjustment
 def adjust_learning_rate(optimizer, val_losses, threshold=0.01, reduce_factor=0.7, increase_factor=1.3, min_lr=1e-5, max_lr=1e-3):
@@ -87,6 +89,8 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         for step, (imgs, targets) in enumerate(train_loader):
             imgs = imgs.to(device)
             targets = targets.squeeze(1).to(device, dtype=torch.long)
+
+            #print("Targets unique values:", torch.unique(targets))  # Add this line
             # forward pass
             with autocast(device_type="cuda"):
                 outputs = model(imgs)
@@ -94,6 +98,7 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
             # backwards pass
             scaler.scale(loss).backward()
             if (step + 1) % accumulation_steps == 0 or (step + 1) == len(train_loader):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Add gradient clipping
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
@@ -124,7 +129,7 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         # Clear cache to avoid memory overflow
         torch.cuda.empty_cache()
 
-        torch.save(model.state_dict(), f"models/{filename}{datetime.datetime.now()}.pth")
+        torch.save(model.state_dict(), f"models/{filename}.pth")
         print("Model saved.")
         # live_plot.save("unet_curve.png")
 
@@ -139,11 +144,12 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         print(f"saving loss/{filename}_loss.png")
         plt.savefig(f"loss/{filename}_loss.png")
 
+
 # Main training loop
 def main():
-    batch_size = 64  # Reduced to fit GTX 1650 VRAM
+    batch_size = 32  # Reduced to fit GTX 1650 VRAM
     num_classes = 21
-    num_epochs = 20
+    num_epochs = 30
     learning_rate = 1e-3
     global filename 
     filename = 'student'
@@ -171,15 +177,20 @@ def main():
         device = 'cuda'
     print('\t\tusing device ', device)
 
+    model = student(num_classes=21).to(device)
+
     # transforms
     train_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.RandomRotation(15),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    transforms.Resize((224, 224)),
+    transforms.RandomRotation(15),            # Add random rotations
+    transforms.RandomHorizontalFlip(),        # Add horizontal flips
+    transforms.ColorJitter(                   # Adjust brightness, contrast, etc.
+        brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1
+    ),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
+
     val_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -209,13 +220,29 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-    model = student(num_classes=21).to(device)
-    model.apply(init_weights)
+        # Compute class weights dynamically based on dataset
+    def compute_class_weights(dataset, num_classes=21):
+        """Calculate class weights inversely proportional to class frequencies."""
+        class_counts = torch.zeros(num_classes)  # Initialize counts for each class
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+        for _, targets in dataloader:
+            targets = targets.squeeze().view(-1)  # Flatten target mask
+            for cls in range(num_classes):  # Count pixels per class
+                class_counts[cls] += torch.sum(targets == cls).item()
+        total_pixels = class_counts.sum()
+        weights = total_pixels / (num_classes * class_counts)  # Inverse frequency
+        weights[class_counts == 0] = 0  # Handle classes not present in the dataset
+        return weights
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=255)
+    # Compute weights dynamically for the training dataset
+    class_weights = compute_class_weights(train_dataset, num_classes=21).to(device)
+    print("Computed Class Weights:", class_weights)
+
+    # Define the loss function using the computed class weights
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min')
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
     scaler = GradScaler()
 
     live_plot = LivePlot()
