@@ -89,7 +89,8 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
         for step, (imgs, targets) in enumerate(train_loader):
             imgs = imgs.to(device)
             targets = targets.squeeze(1).to(device, dtype=torch.long)
-
+            # Remap background class (0) to ignore_index (255)
+            targets[targets == 0] = 255
             #print("Targets unique values:", torch.unique(targets))  # Add this line
             # forward pass
             with autocast(device_type="cuda"):
@@ -220,26 +221,8 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-        # Compute class weights dynamically based on dataset
-    def compute_class_weights(dataset, num_classes=21):
-        """Calculate class weights inversely proportional to class frequencies."""
-        class_counts = torch.zeros(num_classes)  # Initialize counts for each class
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
-        for _, targets in dataloader:
-            targets = targets.squeeze().view(-1)  # Flatten target mask
-            for cls in range(num_classes):  # Count pixels per class
-                class_counts[cls] += torch.sum(targets == cls).item()
-        total_pixels = class_counts.sum()
-        weights = total_pixels / (num_classes * class_counts)  # Inverse frequency
-        weights[class_counts == 0] = 0  # Handle classes not present in the dataset
-        return weights
-
-    # Compute weights dynamically for the training dataset
-    class_weights = compute_class_weights(train_dataset, num_classes=21).to(device)
-    print("Computed Class Weights:", class_weights)
-
     # Define the loss function using the computed class weights
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
