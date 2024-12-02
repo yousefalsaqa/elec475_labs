@@ -164,7 +164,11 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
 
             # Get model predictions
             outputs = model(images)
-            predictions = torch.argmax(outputs, dim=1)  # Convert logits to class indices
+            if isinstance(outputs, tuple):
+                logits = outputs[0]  # Get the first output (logits)
+            else:
+                logits = outputs  # If not a tuple, assume it's the logits directly
+            predictions = torch.argmax(logits, dim=1)  # Convert logits to class indices
             # Calculate mIoU for the batch
             batch_miou = calculate_miou(predictions, targets, num_classes)
             plot_segmentation(predictions, targets, 21, save_path=None)
@@ -178,5 +182,5 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
     print(f"Mean Intersection over Union (mIoU): {overall_miou:.4f}")
 
 if __name__ == "__main__":
-    model_checkpoint = "./models/student.pth"  # Path to the trained custom model checkpoint
+    model_checkpoint = "./models/model_student_lr0.002_bs16.pth"  # Path to the trained custom model checkpoint
     test_custom_model(model_path=model_checkpoint)
