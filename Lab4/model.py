@@ -64,7 +64,7 @@ class student(nn.Module):
     def forward(self, x):
         # Encoder path
         enc1 = self.enc1(x)
-        enc2 = self.enc2(self.pool1(enc1))
+        enc2 = self.enc2(self.pool1(enc1))  # Intermediate feature map
         enc3 = self.enc3(self.pool2(enc2))
         enc4 = self.enc4(self.pool3(enc3))
         bottleneck = self.bottleneck(self.pool4(enc4))
@@ -89,7 +89,8 @@ class student(nn.Module):
         # Output
         out = self.final_conv(dec1)
         out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
-        return out
+        return out, enc2  # Return final output and intermediate feature map
+
 
 
 # Test the model
