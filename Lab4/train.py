@@ -74,9 +74,11 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
-def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, scheduler, device, scaler):
+import datetime
+import torch
+
+def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, scheduler, device):
     print('training started at {}'.format(datetime.datetime.now()))
-    accumulation_steps = 4
 
     train_losses = []
     val_losses = []
@@ -90,23 +92,19 @@ def train(num_epochs, optimizer, model, loss_fn, train_loader, val_loader, sched
             imgs = imgs.to(device)
             targets = targets.squeeze(1).to(device, dtype=torch.long)
             # Remap background class (0) to ignore_index (255)
-            targets[targets == 0] = 255
             #print("Targets unique values:", torch.unique(targets))  # Add this line
             # forward pass
-            with autocast(device_type="cuda"):
-                outputs = model(imgs)
-                loss = loss_fn(outputs, targets)
+            outputs = model(imgs)
+            loss = loss_fn(outputs, targets)
             # backwards pass
-            scaler.scale(loss).backward()
-            if (step + 1) % accumulation_steps == 0 or (step + 1) == len(train_loader):
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Add gradient clipping
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Add gradient clipping
+            optimizer.step()
+            optimizer.zero_grad()
 
             total_train_loss += loss.item()
 
-        train_loss = [total_train_loss/len(train_loader)]
+        train_loss = [total_train_loss / len(train_loader)]
         train_losses.append(train_loss)
 
         # validation
@@ -159,6 +157,8 @@ def main():
     argParser.add_argument('-e', metavar='epochs', type=int, help='# of epochs [30]')
     argParser.add_argument('-b', metavar='batch size', type=int, help='batch size [32]')
     argParser.add_argument('-f', metavar='filename', type=int, help='the name of the .pth file to save')
+    argParser.add_argument('-l', metavar='learning rate', type=float, help='the name of the .pth file to save')
+
     args = argParser.parse_args()
 
     if not os.path.exists("models"):
@@ -172,6 +172,8 @@ def main():
         batch_size = args.b
     if args.f != None:
         filename = args.f
+    if args.l != None:
+        learning_rate = args.l
 
     device = 'cpu'
     if torch.cuda.is_available():
@@ -203,14 +205,14 @@ def main():
     ])
 
     # data loaders
-    train_dataset = VOCSegmentation(root='./Lab4/data', year='2012',
+    train_dataset = VOCSegmentation(root='./data', year='2012',
         image_set='train',
         download=True,
         transform=train_transform,
         target_transform=target_transform
     )
     val_dataset = VOCSegmentation(
-        root='./Lab4/data',
+        root='./data',
         year='2012',
         image_set='val',
         download=True,
@@ -226,7 +228,7 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
-    scaler = GradScaler()
+    # scaler = GradScaler()
 
     live_plot = LivePlot()
     val_losses = []
@@ -244,7 +246,7 @@ def main():
         train_loader=train_loader,
         val_loader=val_loader,
         scheduler=scheduler,
-        scaler=scaler,
+        # scaler=scaler,
         device=device)
 
 
