@@ -114,7 +114,6 @@ class student(nn.Module):
 if __name__ == "__main__":
     model = student(in_channels=3, num_classes=21)
     input_tensor = torch.randn(1, 3, 224, 224)
-    output, intermediate = model(input_tensor)
-    print(f"Output shape: {output.shape}")
-    print(f"Intermediate feature shape: {intermediate.shape}")
+    output = model(input_tensor)
+    print(f"Output shape: {output[0].shape}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
