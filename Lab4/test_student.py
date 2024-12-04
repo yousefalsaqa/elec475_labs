@@ -171,7 +171,7 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
             predictions = torch.argmax(logits, dim=1)  # Convert logits to class indices
             # Calculate mIoU for the batch
             batch_miou = calculate_miou(predictions, targets, num_classes)
-            plot_segmentation(predictions, targets, 21, save_path=None)
+            # plot_segmentation(predictions, targets, 21, save_path=None)
             miou_list.append(batch_miou)
 
             if idx % 10 == 0:
@@ -184,5 +184,5 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
 if __name__ == "__main__":
     # good model is nstudent_32_0.0002_1e-05
     # distilled is student_distilled
-    model_checkpoint = "./models/student_distilled.pth"  # Path to the trained custom model checkpoint
+    model_checkpoint = "./models/n3student_32_0.0002_1e-05.pth"  # Path to the trained custom model checkpoint
     test_custom_model(model_path=model_checkpoint)

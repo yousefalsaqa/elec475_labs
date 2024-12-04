@@ -1,3 +1,5 @@
+# %%
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -94,8 +96,8 @@ class student(nn.Module):
         out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
 
         # Debugging output shape
-        print(f"Forward pass output shape: {out.shape}")
-        return out, enc2  # Return final output and intermediate feature map
+        # print(f"Forward pass output shape: {out.shape}")
+        return out, [enc4, bottleneck]  # Return final output and intermediate feature map
 
     def initialize_weights(self):
         """
@@ -110,10 +112,56 @@ class student(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
+
+import torch
+import torch.nn as nn
+import torchvision.models as models
+
+class ResNet50WithIntermediateFeatures(nn.Module):
+    def __init__(self):
+        super(ResNet50WithIntermediateFeatures, self).__init__()
+        # Load a pretrained ResNet-50
+        self.resnet50 = models.resnet50(pretrained=True)
+        
+        # Extract specific parts of ResNet-50
+        self.conv1 = nn.Sequential(
+            self.resnet50.conv1,
+            self.resnet50.bn1,
+            self.resnet50.relu,
+            self.resnet50.maxpool
+        )
+        self.layer1 = self.resnet50.layer1
+        self.layer2 = self.resnet50.layer2
+        self.layer3 = self.resnet50.layer3
+        self.layer4 = self.resnet50.layer4
+        self.avgpool = self.resnet50.avgpool
+        self.fc = self.resnet50.fc
+
+    def forward(self, x):
+        # Pass through layers and store intermediate feature maps
+        x = self.conv1(x)
+        feature_map1 = self.layer1(x)  # First intermediate feature map
+        feature_map2 = self.layer2(feature_map1)  # Second intermediate feature map
+        x = self.layer3(feature_map2)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        predictions = self.fc(x)  # Final prediction
+        
+        return predictions, [feature_map1, feature_map2]
+
+# Instantiate the model
+model = ResNet50WithIntermediateFeatures()
+model.eval()  # Set to evaluation mode
+
+
 # Test the model with debugging
 if __name__ == "__main__":
-    model = student(in_channels=3, num_classes=21)
+    student_model = student(in_channels=3, num_classes=21)
+    teacher_model = ResNet50WithIntermediateFeatures()
     input_tensor = torch.randn(1, 3, 224, 224)
-    output = model(input_tensor)
-    print(f"Output shape: {output[0].shape}")
-    print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
+    s_output = student_model(input_tensor)
+    t_output = teacher_model(input_tensor)
+    # import pdb; pdb.set_trace()
+    # print(f"Output shape: {output[0].shape}")
+    # print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")
