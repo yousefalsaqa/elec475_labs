@@ -182,5 +182,7 @@ def test_custom_model(model_path, batch_size=16, num_classes=21):
     print(f"Mean Intersection over Union (mIoU): {overall_miou:.4f}")
 
 if __name__ == "__main__":
-    model_checkpoint = "./models/nstudent_32_0.0002_1e-05.pth"  # Path to the trained custom model checkpoint
+    # good model is nstudent_32_0.0002_1e-05
+    # distilled is student_distilled
+    model_checkpoint = "./models/student_distilled.pth"  # Path to the trained custom model checkpoint
     test_custom_model(model_path=model_checkpoint)

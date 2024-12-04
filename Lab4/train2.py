@@ -84,7 +84,7 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
             datetime.datetime.now(), epoch, loss_val/len(val_loader)))
 
         if save_file != None:
-            torch.save(model.state_dict(), f"models/nstudent_{batch_size}_{learning_rate}_{weight_decay}.pth")
+            torch.save(model.state_dict(), f"models/n3student_{batch_size}_{learning_rate}_{weight_decay}.pth")
 
         # if plot_file != None:
         plt.figure(2, figsize=(12, 7))
@@ -94,8 +94,8 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend(loc=1)
-        print('saving ', f"loss/nstudent_{batch_size}_{learning_rate}_{weight_decay}.png")
-        plt.savefig(f"loss/nstudent_{batch_size}_{learning_rate}_{weight_decay}.png")
+        print('saving ', f"loss/n3student_{batch_size}_{learning_rate}_{weight_decay}.png")
+        plt.savefig(f"loss/n3student_{batch_size}_{learning_rate}_{weight_decay}.png")
 
         # Early stopping
         if loss_val/len(val_loader) < best_val_loss:
@@ -239,7 +239,9 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min')
-    weights = 1/(np.array([3507, 108, 94, 137, 124, 195, 121, 209, 154, 303, 152, 86, 149, 100, 101, 868, 151, 155, 103, 96, 101]))
+    weights = 1/(np.array([1400, 108, 94, 137, 124, 195, 121, 209, 154, 303, 152, 86, 149, 100, 101, 868, 151, 155, 103, 96, 101]))
+    weights = 1/(np.array([1464, 88, 65, 105, 78, 87, 78, 128, 131, 148, 64, 82, 121, 68, 81, 442, 82, 63, 93, 83, 84]))
+
     # weights = 1/(np.array([10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
     weights = weights / weights.sum()
     class_weights = torch.tensor(weights, dtype=torch.float).to(device)

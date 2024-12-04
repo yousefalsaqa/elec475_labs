@@ -5,9 +5,10 @@ from torchvision.models.segmentation import fcn_resnet50
 from torchvision import transforms
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from model import student  # Import your custom student model
+from model import *  # Import your custom student model
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Hyperparameters
 ALPHA = 0.5  # Weight for ground truth loss
@@ -68,18 +69,19 @@ def train_one_epoch(student_model, teacher_model, dataloader, optimizer, loss_fn
     total_loss = 0.0
 
     for imgs, targets in dataloader:
-        imgs, targets = imgs.to(device), targets.squeeze(1).to(device)
+        imgs, targets = imgs.to(device), targets.squeeze(1).to(device, dtype=torch.long)
 
         # Forward pass through student and teacher
-        student_outputs = student_model(imgs)
+        student_outputs, _ = student_model(imgs)
         with torch.no_grad():
             teacher_outputs = teacher_model(imgs)['out']
 
         # Response-based loss
         student_logits = F.log_softmax(student_outputs / TAU, dim=1)
         teacher_logits = F.softmax(teacher_outputs / TAU, dim=1)
-        distillation_loss = F.kl_div(student_logits, teacher_logits, reduction='batchmean') * (TAU ** 2)
-
+        # distillation_loss = F.kl_div(student_logits, teacher_logits, reduction='batchmean') * (TAU ** 2)
+        distillation_loss = F.cross_entropy(student_logits, teacher_logits
+                                            , weight=None)
         # Ground truth loss
         ground_truth_loss = loss_fn(student_outputs, targets)
 
@@ -102,15 +104,15 @@ def validate(student_model, val_loader, loss_fn, device):
 
     with torch.no_grad():
         for imgs, targets in val_loader:
-            imgs, targets = imgs.to(device), targets.squeeze(1).to(device)
-            outputs = student_model(imgs)
+            imgs, targets = imgs.to(device), targets.squeeze(1).to(device, dtype=torch.long)
+            outputs, _ = student_model(imgs)
             loss = loss_fn(outputs, targets)
             total_loss += loss.item()
 
     return total_loss / len(val_loader)
 
 # Plot loss curves
-def plot_losses(train_losses, val_losses, save_path="distillation_loss_curve.png"):
+def plot_losses(train_losses, val_losses, save_path="./loss/distillation_loss_curve.png"):
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses, label="Train Loss")
     plt.plot(val_losses, label="Validation Loss")
@@ -119,11 +121,12 @@ def plot_losses(train_losses, val_losses, save_path="distillation_loss_curve.png
     plt.title("Distillation Loss Curve")
     plt.legend()
     plt.savefig(save_path)
-    plt.show()
+    # plt.show()
 
 # Main function
 def main():
     # Set device
+    model_path = "./models/nstudent_32_0.0002_1e-05.pth"  # Path to the trained custom model checkpoint
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load teacher model (pretrained FCN-ResNet50)
@@ -132,13 +135,18 @@ def main():
         param.requires_grad = False
 
     # Load student model
-    student_model = LightweightSegmentationModel(num_classes=NUM_CLASSES).to(device)
+    student_model = student(num_classes=NUM_CLASSES).to(device)
+    student_model.load_state_dict(torch.load(model_path))
 
     # Load data
     train_loader, val_loader = get_dataloaders(BATCH_SIZE)
 
     # Loss function and optimizer
-    loss_fn = nn.CrossEntropyLoss(ignore_index=255)  # Ignore void class
+    weights = 1/(np.array([1400, 108, 94, 137, 124, 195, 121, 209, 154, 303, 152, 86, 149, 100, 101, 868, 151, 155, 103, 96, 101]))
+    weights = weights / weights.sum()
+    class_weights = torch.tensor(weights, dtype=torch.float).to(device)
+    
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights, ignore_index=255)  # Ignore void class
     optimizer = torch.optim.Adam(student_model.parameters(), lr=LEARNING_RATE)
 
     # Training loop
@@ -154,7 +162,8 @@ def main():
         # Validate
         val_loss = validate(student_model, val_loader, loss_fn, device)
         val_losses.append(val_loss)
-
+        
+        plot_losses(train_losses, val_losses)
         print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
 
     # Save the distilled student model
@@ -164,7 +173,6 @@ def main():
     print("Distilled student model saved.")
 
     # Plot loss curves
-    plot_losses(train_losses, val_losses)
     print("Distillation training complete.")
 
 if __name__ == "__main__":
