@@ -98,5 +98,5 @@ if __name__ == "__main__":
     model = student(in_channels=3, num_classes=21)
     input_tensor = torch.randn(1, 3, 224, 224)
     output = model(input_tensor)
-    print(f"Output shape: {output.shape}")
+    print(f"Output shape: {output[0].shape}")
     print(f"Total parameters: {sum(p.numel() for p in model.parameters())}")

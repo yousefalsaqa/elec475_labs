@@ -78,11 +78,16 @@ class FixMask:
         # Convert back to tensor
         return torch.tensor(np.array(resized_mask), dtype=torch.long)
 
+# Define a named function to replace the lambda
+def convert_to_tensor(mask):
+    return torch.as_tensor(np.array(mask), dtype=torch.long)
+
 
 target_transform = transforms.Compose([
     transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
-    FixMask(),
-    transforms.PILToTensor()
+    # FixMask(),
+    # transforms.PILToTensor()
+    transforms.Lambda(convert_to_tensor)  # Convert to tensor
 ])
 # %%
 train_set = VOCSegmentation(root='./data', 

@@ -42,16 +42,16 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
 
     for epoch in range(1, n_epochs+1):
 
-        print('epoch ', epoch)
+        print('epoch {}/{} at {}'.format(epoch, n_epochs, datetime.datetime.now()))
 
         # training phase
         model.train()
         loss_train = 0.0
         for step, (imgs, targets) in enumerate(train_loader):
-            pdb.set_trace()
+            # pdb.set_trace()
             imgs = imgs.to(device=device)
             targets = targets.squeeze(1).to(device=device, dtype=torch.long)
-            outputs = model(imgs)
+            outputs, _ = model(imgs)
             loss = loss_fn(outputs, targets)
             # print(loss_train)
             optimizer.zero_grad()
@@ -70,7 +70,7 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
                 imgs = imgs.to(device=device)
                 targets = targets.squeeze(1).to(device=device, dtype=torch.long)
 
-                outputs = model(imgs)
+                outputs, _ = model(imgs)
                 loss = loss_fn(outputs, targets)
                 loss_val += loss.item()
 
@@ -84,7 +84,7 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
             datetime.datetime.now(), epoch, loss_val/len(val_loader)))
 
         if save_file != None:
-            torch.save(model.state_dict(), f"models/student_{batch_size}_{learning_rate}_{weight_decay}.pth")
+            torch.save(model.state_dict(), f"models/nstudent_{batch_size}_{learning_rate}_{weight_decay}.pth")
 
         # if plot_file != None:
         plt.figure(2, figsize=(12, 7))
@@ -94,8 +94,8 @@ def train(n_epochs, optimizer, model, loss_fn, train_loader, val_loader, schedul
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.legend(loc=1)
-        print('saving ', f"loss/student_{batch_size}_{learning_rate}_{weight_decay}.png")
-        plt.savefig(f"loss/student_{batch_size}_{learning_rate}_{weight_decay}.png")
+        print('saving ', f"loss/nstudent_{batch_size}_{learning_rate}_{weight_decay}.png")
+        plt.savefig(f"loss/nstudent_{batch_size}_{learning_rate}_{weight_decay}.png")
 
         # Early stopping
         if loss_val/len(val_loader) < best_val_loss:
@@ -113,6 +113,9 @@ def init_weights(m):
     if type(m) == nn.Linear:
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
+
+def convert_to_tensor(mask):
+    return torch.as_tensor(np.array(mask), dtype=torch.long)
 
 def main():
 
@@ -215,7 +218,8 @@ def main():
     target_transform = transforms.Compose([
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
         # FixMask(),
-        transforms.PILToTensor()
+        # transforms.PILToTensor()
+        transforms.Lambda(convert_to_tensor)  # Convert to tensor
     ])
 
     train_set = VOCSegmentation(root='./data', 
@@ -224,7 +228,6 @@ def main():
                                 download=True,
                                 transform=train_transform,
                                 target_transform=target_transform)
-
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=8)
     val_set = VOCSegmentation(root='./data', 
                             year='2012',
@@ -236,9 +239,12 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min')
-    weights = 1/(np.array([1, 108, 94, 137, 124, 195, 121, 209, 154, 303, 152, 86, 149, 100, 101, 868, 151, 155, 103, 96, 101]))
+    weights = 1/(np.array([3507, 108, 94, 137, 124, 195, 121, 209, 154, 303, 152, 86, 149, 100, 101, 868, 151, 155, 103, 96, 101]))
+    # weights = 1/(np.array([10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]))
+    weights = weights / weights.sum()
     class_weights = torch.tensor(weights, dtype=torch.float).to(device)
-    loss_fn = nn.CrossEntropyLoss(weight=class_weights, ignore_index=0, reduction='mean')
+    print(class_weights.shape)
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights, ignore_index=255, reduction='mean')
     
     print('\t\tn epochs = ', n_epochs)
     print('\t\tbatch size = ', batch_size)
