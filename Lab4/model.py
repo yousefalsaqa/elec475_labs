@@ -38,6 +38,9 @@ class student(nn.Module):
         # Output layer
         self.final_conv = nn.Conv2d(32, num_classes, kernel_size=1)
 
+        # Initialize weights
+        self.initialize_weights()
+
     def double_conv(self, in_channels, out_channels):
         """
         Helper function for a double convolution block:
@@ -89,11 +92,25 @@ class student(nn.Module):
         # Output
         out = self.final_conv(dec1)
         out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
+
+        # Debugging output shape
+        print(f"Forward pass output shape: {out.shape}")
         return out, enc2  # Return final output and intermediate feature map
 
+    def initialize_weights(self):
+        """
+        Initialize model weights using Xavier initialization.
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                nn.init.xavier_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
-
-# Test the model
+# Test the model with debugging
 if __name__ == "__main__":
     model = student(in_channels=3, num_classes=21)
     input_tensor = torch.randn(1, 3, 224, 224)
